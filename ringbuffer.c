@@ -75,29 +75,6 @@ static int write_buf(char *buf, struct ring *ring_buf)
         char *temp = strtok(NULL, " ");
 }
 
-static int ring_loop(int *exit, char *buf, struct ring *ring_buf)
-{
-        int com = 0;
-        char *token  = NULL;
-
-        token = strtok(buf, " ");
-        if (token == NULL)
-                fprintf(stderr, "strtok failed : %s\n", strerror(errno));
-
-                if (strncmp("write", token, strlen("write"))==0) {
-                        write_buf(buf, ring_buf);
-                 } else if (strncmp("read", token, strlen("read"))==0) {
-                         read_buf(buf, ring_buf);
-
-                 } else if (strncmp("print", token, strlen("print"))==0) {
-                         print_buf(ring_buf);
-                 } else if (strncmp("exit", token, strlen("exit"))==0) {
-                *exit = 0;
-                 } else  {
-                         fprintf(stderr, "unknown command\n");
-                 }
-        return 0;
-}
 static void print_buf(struct ring *buf)
 {
         int i = buf->tail;
@@ -140,6 +117,30 @@ static void print_buf(struct ring *buf)
                         printf("-");
         }
         printf("|\n");
+}
+
+static int ring_loop(int *exit, char *buf, struct ring *ring_buf)
+{
+        int com = 0;
+        char *token  = NULL;
+
+        token = strtok(buf, " ");
+        if (token == NULL)
+                fprintf(stderr, "strtok failed : %s\n", strerror(errno));
+
+                if (strncmp("write", token, strlen("write"))==0) {
+                        write_buf(buf, ring_buf);
+                 } else if (strncmp("read", token, strlen("read"))==0) {
+                         read_buf(buf, ring_buf);
+
+                 } else if (strncmp("print", token, strlen("print"))==0) {
+                         print_buf(ring_buf);
+                 } else if (strncmp("exit", token, strlen("exit"))==0) {
+                         *exit = 0;
+                 } else  {
+                         fprintf(stderr, "unknown command\n");
+                 }
+        return 0;
 }
 
 int main(void)
