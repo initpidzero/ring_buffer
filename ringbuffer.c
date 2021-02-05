@@ -68,11 +68,25 @@ static void init_buf(struct ring *buf)
 static int read_buf(char *buf, struct ring *ring_buf)
 {
         char *temp = strtok(NULL, " \n");
+        int num = atoi(temp);
+        int i;
+        char in;
+        for (i = 0; i < num; i++) {
+                rem_from_buf(ring_buf, &in);
+                printf("%c\n", in);
+        }
 }
 
 static int write_buf(char *buf, struct ring *ring_buf)
 {
-        char *temp = strtok(NULL, " ");
+        char *temp;
+        while (1) {
+                temp = strtok(NULL, " ");
+                if (temp == NULL)
+                        break;
+                printf("we got %s\n", temp);
+                add_to_buf(ring_buf, temp[0]);
+        }
 }
 
 static void print_buf(struct ring *buf)
