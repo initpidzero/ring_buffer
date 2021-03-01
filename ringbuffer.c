@@ -57,7 +57,6 @@ static int add_to_buf(struct ring *buf, char in)
         buf->buffer[buf->head] = in;
         buf->head++;
         buf->head = buf->head % (BUF_SIZ);
-
         return 0;
 }
 
@@ -75,7 +74,7 @@ static int read_buf(char *buf, struct ring *ring_buf)
                 fprintf(stderr, "Missing number\n");
                 return 1;
         }
-        int num = atoi(temp);
+        int num = strtol(temp, NULL, 10);
         int i;
         char in;
         for (i = 0; i < num; i++) {
@@ -121,13 +120,15 @@ static void print_ring(struct ring *buf)
                 i = i % (BUF_SIZ);
         }
 
-        //printf("|%c", buf->buffer[i]);
         printf("|head = %d\n", i);
         /* head is ahead by one, so we rewind back one position to get */
         if (i != 0)
                 pb[i].head_or_tail = 'H';
         else
-                pb[BUF_SIZ - 1].head_or_tail = 'H';
+                if(buf->tail == 0)
+                        pb[i].head_or_tail = 'T';
+                else
+                        pb[BUF_SIZ - 1].head_or_tail = 'H';
 
         for (;j < BUF_SIZ; j++) {
                 printf("|");
