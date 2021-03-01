@@ -46,6 +46,7 @@ static int rem_from_buf(struct ring *buf, char *in)
         *in = buf->buffer[buf->tail];
         buf->tail++;
         buf->tail = buf-> tail % (BUF_SIZ);
+        return 0;
 }
 
 static int add_to_buf(struct ring *buf, char in)
@@ -56,6 +57,8 @@ static int add_to_buf(struct ring *buf, char in)
         buf->buffer[buf->head] = in;
         buf->head++;
         buf->head = buf->head % (BUF_SIZ);
+
+        return 0;
 }
 
 static void init_buf(struct ring *buf)
@@ -68,13 +71,19 @@ static void init_buf(struct ring *buf)
 static int read_buf(char *buf, struct ring *ring_buf)
 {
         char *temp = strtok(NULL, " \n");
+        if (!temp) {
+                fprintf(stderr, "Missing number\n");
+                return 1;
+        }
         int num = atoi(temp);
         int i;
         char in;
         for (i = 0; i < num; i++) {
-                rem_from_buf(ring_buf, &in);
+                if (rem_from_buf(ring_buf, &in))
+                        break;
                 printf("%c\n", in);
         }
+        return 0;
 }
 
 static int write_buf(char *buf, struct ring *ring_buf)
@@ -85,8 +94,10 @@ static int write_buf(char *buf, struct ring *ring_buf)
                 if (temp == NULL)
                         break;
                 printf("we got %s\n", temp);
-                add_to_buf(ring_buf, temp[0]);
+                if (add_to_buf(ring_buf, temp[0]))
+                       break;
         }
+        return 0;
 }
 
 static void print_ring(struct ring *buf)
@@ -94,9 +105,8 @@ static void print_ring(struct ring *buf)
         int i = buf->tail;
         int j = 0;
         struct print_buf pb[BUF_SIZ];
-        memset(pb, 0, BUF_SIZ);
-        //if (is_empty(buf))
-        //       return;
+        memset(pb, 0, BUF_SIZ * sizeof(struct print_buf));
+
         printf("|tail = %d", i);
 
         /*head is ahead by one */
@@ -146,7 +156,6 @@ static int ring_loop(int *exit, char *buf, struct ring *ring_buf)
                         write_buf(buf, ring_buf);
                  } else if (strncmp("read", token, strlen("read"))==0) {
                          read_buf(buf, ring_buf);
-
                  } else if (strncmp("print", token, strlen("print"))==0) {
                          print_ring(ring_buf);
                  } else if (strncmp("exit", token, strlen("exit"))==0) {
