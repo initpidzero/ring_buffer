@@ -7,6 +7,8 @@
 
 #define BUF_SIZ 20
 
+static unsigned long buf_siz = 0;
+
 struct ring {
         char *head; /* head will always be ahead by 1 */
         char *tail;
@@ -55,7 +57,7 @@ static int add_to_buf(struct ring *buf, char in)
 {
         if (is_full(buf))
                 return 1;
-        printf("%c %d\n", in, buf->head);
+        printf("%c %p\n", in, buf->head);
         *(buf->head) = in;
         buf->head++;
         if(buf->head > buf->buffer + buf->size)
@@ -65,12 +67,28 @@ static int add_to_buf(struct ring *buf, char in)
 
 static void init_buf(struct ring *buf)
 {
-        buf->size = BUF_SIZ;
+        buf->size = buf_siz;
         buf->buffer = malloc(buf->size);
         memset(buf->buffer, 0, buf->size);
         buf->head = buf->buffer;
         buf->tail = buf->buffer;
 }
+
+static int read_size(char *buf, struct ring *ring_buf)
+{
+        char *temp = strtok(NULL, " \n");
+        if (!temp) {
+                fprintf(stderr, "Missing number\n");
+                return 1;
+        }
+        long num = strtol(temp, NULL, 10);
+        if (errno)
+                fprintf(stderr, "strtol failed : %s\n", strerror(errno));
+        else
+                buf_siz = num;
+        return 0;
+}
+
 
 static int read_buf(char *buf, struct ring *ring_buf)
 {
@@ -106,8 +124,8 @@ static int write_buf(char *buf, struct ring *ring_buf)
 
 static void print_ring(struct ring *buf)
 {
-        int i = buf->tail - buf->buffer;
-        int j = 0;
+        unsigned int i = buf->tail - buf->buffer;
+        unsigned int j = 0;
         struct print_buf pb[buf->size];
         memset(pb, 0, buf->size * sizeof(struct print_buf));
 
@@ -151,24 +169,35 @@ static void print_ring(struct ring *buf)
 
 static int ring_loop(int *exit, char *buf, struct ring *ring_buf)
 {
-        int com = 0;
         char *token  = NULL;
 
         token = strtok(buf, " ");
         if (token == NULL)
                 fprintf(stderr, "strtok failed : %s\n", strerror(errno));
 
-                if (strncmp("write", token, strlen("write"))==0) {
+        if (strncmp("size", token, strlen("size"))==0) {
+                read_size(buf, ring_buf);
+                init_buf(ring_buf);
+        } else if (strncmp("write", token, strlen("write"))==0) {
+                if (buf_siz)
                         write_buf(buf, ring_buf);
-                 } else if (strncmp("read", token, strlen("read"))==0) {
-                         read_buf(buf, ring_buf);
-                 } else if (strncmp("print", token, strlen("print"))==0) {
-                         print_ring(ring_buf);
-                 } else if (strncmp("exit", token, strlen("exit"))==0) {
-                         *exit = 0;
-                 } else  {
-                         fprintf(stderr, "unknown command\n");
-                 }
+                else
+                        fprintf(stderr, "buffer is zero size\n");
+        } else if (strncmp("read", token, strlen("read"))==0) {
+                if (buf_siz)
+                        read_buf(buf, ring_buf);
+                else
+                        fprintf(stderr, "buffer is zero size\n");
+        } else if (strncmp("print", token, strlen("print"))==0) {
+                if (buf_siz)
+                        print_ring(ring_buf);
+                else
+                        fprintf(stderr, "buffer is zero size\n");
+        } else if (strncmp("exit", token, strlen("exit"))==0) {
+                *exit = 0;
+        } else  {
+                fprintf(stderr, "unknown command\n");
+        }
         return 0;
 }
 
@@ -178,9 +207,6 @@ int main(void)
         char prompt[] = "(ring):";
         char buffer[BUF_SIZ];
         struct ring ring_buf;
-        int i;
-        init_buf(&ring_buf);
-        char c;
         while (exit) {
                 ssize_t bytes_read;
 
