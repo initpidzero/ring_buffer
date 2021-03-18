@@ -1,3 +1,9 @@
+/* This file is under GPLv2
+ * This is a simple implementation of a ring/circular buffer
+ * There is a command driven loop, which takes input commands and can print
+ * buffer with print command
+ * Author: Anuz me@anuz.me */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,10 +11,15 @@
 #include <errno.h>
 #include <assert.h>
 
+/* House keeping buffer*/
 #define BUF_SIZ 20
 
+/* this is the size we assign to the ring buffer */
 static unsigned long buf_siz = 0;
 
+/* our ring, it keep tail, head pointers and buffer is the actual buffer
+ * and the size of the buffer, it can store (size - 1) bytes.
+ * we are using 1 byte for housekeeping purposes */
 struct ring {
         char *head; /* head will always be ahead by 1 */
         char *tail;
@@ -16,22 +27,24 @@ struct ring {
         unsigned int size;
 };
 
-struct print_buf{
-        unsigned char empty;
-        unsigned char value;
-        unsigned char head_or_tail;
-};
-
+/* Checks if ring buffer is full
+ * in: buf - ring buffer
+ * return: 1 if it is full, 0 if it is not full */
 static int is_full(struct ring *buf)
 {
-        if (((buf->head > buf->tail) && (buf->head - buf->tail == buf->size - 2))
-            || ((buf->head < buf->tail) && (buf->tail - buf->head == 2))) {
+        /* ring is full if the abs(head - tail) == 1, we leave one space between
+         * head and tail when it is full, to distinguish between empty condition. */
+        if (((buf->head > buf->tail) && (buf->head - buf->tail == buf->size - 1))
+            || ((buf->head < buf->tail) && (buf->tail - buf->head == 1))) {
                 printf("is full\n");
                 return 1;
         } else
                 return 0;
 }
 
+/* Checks if ring buffer is empty
+ * in: buf - ring buffer
+ * return: 1 if it is emtpy, 0 if it is not empty */
 static int is_empty(struct ring *buf)
 {
         if (buf->head == buf->tail) {
@@ -41,39 +54,63 @@ static int is_empty(struct ring *buf)
                 return 0;
 }
 
+/* Consumer function one byte at a time
+ * in: buf - ring buffer to consume from
+ * out: in - put the byte here.
+ * return: 1 if empty, 0 if everything is normal */
 static int rem_from_buf(struct ring *buf, char *in)
 {
         if (is_empty(buf))
                 return 1;
 
-        *in = *buf->tail;
+        *in = *(buf->tail);
+        *(buf->tail) = 0; /* this is not really required, but for printing, we are using 0 as empty lot */
         buf->tail++;
-        if(buf->tail > buf->buffer + buf->size)
+        /* Once we reach the end of the buffer, we go all the way around */
+        if(buf->tail == buf->buffer + buf->size)
                 buf->tail = buf->buffer;
         return 0;
 }
 
+/* Add one byte to the ring buffer
+ * in: in - byte to be added to the buffer
+ * out: buf - ring buffer to add this byte to
+ * return: 1 if empty, 0 if everything is normal */
 static int add_to_buf(struct ring *buf, char in)
 {
         if (is_full(buf))
                 return 1;
         printf("%c %p\n", in, buf->head);
         *(buf->head) = in;
+        /* Note that we are keeping our head ahead by one byte */
         buf->head++;
-        if(buf->head > buf->buffer + buf->size)
+        /* Once we reach the end of the buffer, we go all the way around */
+        if(buf->head == buf->buffer + buf->size)
                 buf->head = buf->buffer;
         return 0;
 }
 
+/* Ring buffer initialisation
+ * in: buf - ring buffer to initialise
+ * return: none. We should probably return error in case malloc fails */
 static void init_buf(struct ring *buf)
 {
         buf->size = buf_siz;
         buf->buffer = malloc(buf->size);
+        if (!buf->buffer || errno) {
+                fprintf(stderr, "malloc failed: %s\n", strerror(errno));
+                return;
+        }
+
         memset(buf->buffer, 0, buf->size);
         buf->head = buf->buffer;
         buf->tail = buf->buffer;
 }
 
+/* Read user input for buffer size
+ * in: buf - user buffer
+ * out: buf_siz - file scope extern variable for size
+ * return: 1 if strtok or strtol fails, 0 if everything is normal */
 static int read_size(char *buf, struct ring *ring_buf)
 {
         char *temp = strtok(NULL, " \n");
@@ -82,14 +119,20 @@ static int read_size(char *buf, struct ring *ring_buf)
                 return 1;
         }
         long num = strtol(temp, NULL, 10);
-        if (errno)
+        if (errno) {
                 fprintf(stderr, "strtol failed : %s\n", strerror(errno));
+                return 1;
+        }
         else
                 buf_siz = num;
         return 0;
 }
 
 
+/* Read user input for number of bytes to be removed buffer
+ * in: buf - user buffer
+ * out: ring_buf - ring buffer
+ * return: 1 if strtok or strtol fails, 0 if everything is normal */
 static int read_buf(char *buf, struct ring *ring_buf)
 {
         char *temp = strtok(NULL, " \n");
@@ -98,6 +141,10 @@ static int read_buf(char *buf, struct ring *ring_buf)
                 return 1;
         }
         int num = strtol(temp, NULL, 10);
+        if (errno) {
+                fprintf(stderr, "strtol failed : %s\n", strerror(errno));
+                return 1;
+        }
         int i;
         char in;
         for (i = 0; i < num; i++) {
@@ -108,6 +155,10 @@ static int read_buf(char *buf, struct ring *ring_buf)
         return 0;
 }
 
+/* Read user input for bytes to be added to buffer
+ * in: buf - user buffer
+ * out: ring_buf - ring buffer
+ * return:  0, if everything is normal */
 static int write_buf(char *buf, struct ring *ring_buf)
 {
         char *temp;
@@ -122,51 +173,31 @@ static int write_buf(char *buf, struct ring *ring_buf)
         return 0;
 }
 
+/* A print helper function
+ * in: buf - ring buffer
+ * return: nothing */
 static void print_ring(struct ring *buf)
 {
-        unsigned int i = buf->tail - buf->buffer;
-        unsigned int j = 0;
-        struct print_buf pb[buf->size];
-        memset(pb, 0, buf->size * sizeof(struct print_buf));
-
-        printf("|tail = %d", i);
-
-        /*head is ahead by one */
-        while (i != buf->head - buf->buffer) {
-                printf("|%d=%c", i, buf->buffer[i]);
-                pb[i].value = buf->buffer[i];
-                pb[i].head_or_tail = 0;
-                if (i == buf->tail - buf->buffer)
-                        pb[i].head_or_tail = 'T';
-                pb[i].empty = 'F';
-                i++;
-                i = i % (buf->size);
-        }
-
-        printf("|head = %d\n", i);
-        /* head is ahead by one, so we rewind back one position to get */
-        if (i != 0)
-                pb[i].head_or_tail = 'H';
-        else
-                if(buf->tail == 0)
-                        pb[i].head_or_tail = 'T';
-                else
-                        pb[buf->size - 1].head_or_tail = 'H';
-
-        for (;j < buf->size; j++) {
+        char *temp = buf->buffer;
+        for (;temp < (buf->buffer + buf->size); temp++) {
                 printf("|");
-                if (pb[j].head_or_tail == 'T')
-                        printf("T");
-                if (pb[j].head_or_tail == 'H')
+                if (temp == buf->head)
                         printf("H");
-                if (pb[j].empty == 'F')
-                        printf("%c", pb[j].value);
-                else
+                if (temp == buf->tail)
+                        printf("T");
+                if (*temp == 0)
                         printf("-");
+                else
+                        printf("%c", *temp);
         }
         printf("|\n");
+
 }
 
+/* Use input Loop for interacting with user
+ * in: buf- user buffer, ring_buf - ring buffer
+ * out: exit: 1 to exit from loop
+ * return 0: loop shouldn't ordinarily fail. */
 static int ring_loop(int *exit, char *buf, struct ring *ring_buf)
 {
         char *token  = NULL;
